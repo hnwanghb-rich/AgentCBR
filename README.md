@@ -2,6 +2,7 @@
 
 ## 功能特性
 
+- 图形化界面，可视化操作
 - 自动登录网站并抓取列表数据
 - 支持PDF、Word、Excel、图片等多种附件格式
 - OCR图片识别（中英文）
@@ -15,12 +16,14 @@
 pip install -r requirements.txt
 ```
 
-## 配置
-
-编辑 `config/config.json` 设置网站URL、登录信息等
-
 ## 运行
 
+### GUI界面版本
+```bash
+python src/gui.py
+```
+
+### 命令行版本
 ```bash
 python src/main.py
 ```
@@ -32,4 +35,4 @@ pip install pyinstaller
 python build.py
 ```
 
-生成的exe文件在 `dist/AgentCBR.exe`
+生成的exe文件在 `dist/AgentCBR.exe`，双击即可运行图形界面
