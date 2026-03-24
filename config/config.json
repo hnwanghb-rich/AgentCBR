@@ -1,0 +1,28 @@
+{
+  "website": {
+    "url": "https://cc.cscec.com/",
+    "username": "测试公司",
+    "password": "KzmPJDswrr_8gj",
+    "timeout": 30,
+    "retry_times": 3
+  },
+  "target_pages": [
+    {
+      "name": "默认列表页",
+      "url": "",
+      "enabled": true
+    }
+  ],
+  "output": {
+    "directory": "./output",
+    "format": "docx"
+  },
+  "log": {
+    "directory": "./logs",
+    "level": "INFO"
+  },
+  "github": {
+    "repo": "https://github.com/hnwanghb-rich/AgentCBR.git",
+    "token": ""
+  }
+}
