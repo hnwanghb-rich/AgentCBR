@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+output/
+logs/
+temp/
+*.log
+.env
+config/config.local.json
