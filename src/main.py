@@ -1,25 +1,11 @@
-import sys
-import json
-from pathlib import Path
-from scraper import WebScraper
-from logger import Logger
+"""碳盘查审核系统 - 主入口"""
+import tkinter as tk
+from carbon_audit_gui import CarbonAuditGUI
 
 def main():
-    config_path = Path("config/config.json")
-    with open(config_path, 'r', encoding='utf-8') as f:
-        config = json.load(f)
-
-    logger = Logger(config['log']['directory'])
-    scraper = WebScraper(config, logger)
-
-    try:
-        scraper.run()
-    except KeyboardInterrupt:
-        logger.info("程序被用户中断")
-    except Exception as e:
-        logger.error(f"程序异常: {str(e)}")
-    finally:
-        scraper.close()
+    root = tk.Tk()
+    app = CarbonAuditGUI(root)
+    root.mainloop()
 
 if __name__ == "__main__":
     main()
