@@ -264,3 +264,170 @@ class DataScraper:
         except Exception as e:
             self.logger.read(f"✗ 抓取失败: {str(e)}")
             return pd.DataFrame()
+
+    def scrape_cascade_structure(self) -> Dict[str, any]:
+        """抓取级联结构 A->B->C->D"""
+        all_data = []
+        tree_nodes = self.get_tree_nodes()
+
+        # 跳过最高级，遍历其他节点
+        for node_idx, node_text in enumerate(tree_nodes[1:] if len(tree_nodes) > 1 else [], 1):
+            self.logger.read(f"\n[树节点 {node_idx}] {node_text}")
+            self.click_tree_node(node_text)
+
+            # 抓取A层
+            a_data = self._scrape_level_a()
+            all_data.extend(a_data)
+
+        return all_data
+
+    def _scrape_level_a(self) -> List[Dict]:
+        """A层：遍历分页，点击'进入'"""
+        a_data = []
+        page = 1
+
+        while True:
+            self.logger.read(f"  A层-第{page}页")
+            rows = self.page.query_selector_all('tbody tr')
+
+            for idx in range(len(rows)):
+                rows = self.page.query_selector_all('tbody tr')
+                if idx >= len(rows):
+                    break
+
+                btn = self._find_btn_in_row(rows[idx], ['进入'])
+                if btn:
+                    btn.click()
+                    time.sleep(1)
+                    b_data = self._scrape_level_b()
+                    a_data.append({'b_data': b_data})
+                    self.page.go_back()
+                    time.sleep(1)
+
+            if not self._next_page():
+                break
+            page += 1
+
+        return a_data
+
+    def _scrape_level_b(self) -> List[Dict]:
+        """B层：遍历分页，点击'查看记录'"""
+        b_data = []
+        page = 1
+
+        while True:
+            self.logger.read(f"    B层-第{page}页")
+            rows = self.page.query_selector_all('tbody tr')
+
+            for idx in range(len(rows)):
+                rows = self.page.query_selector_all('tbody tr')
+                if idx >= len(rows):
+                    break
+
+                btn = self._find_btn_in_row(rows[idx], ['查看记录'])
+                if btn:
+                    btn.click()
+                    time.sleep(1)
+                    c_data = self._scrape_level_c()
+                    b_data.append({'c_data': c_data})
+                    self.page.go_back()
+                    time.sleep(1)
+
+            if not self._next_page():
+                break
+            page += 1
+
+        return b_data
+
+    def _scrape_level_c(self) -> List[Dict]:
+        """C层：遍历分页，点击'查看'"""
+        c_data = []
+        page = 1
+
+        while True:
+            self.logger.read(f"      C层-第{page}页")
+            rows = self.page.query_selector_all('tbody tr')
+
+            for idx in range(len(rows)):
+                rows = self.page.query_selector_all('tbody tr')
+                if idx >= len(rows):
+                    break
+
+                btn = self._find_btn_in_row(rows[idx], ['查看'])
+                if btn:
+                    btn.click()
+                    time.sleep(1)
+                    d_data = self._scrape_level_d()
+                    c_data.append({'d_data': d_data})
+                    self.page.go_back()
+                    time.sleep(1)
+
+            if not self._next_page():
+                break
+            page += 1
+
+        return c_data
+
+    def _scrape_level_d(self) -> Dict:
+        """D层：叶子节点，抓取详细数据和附件"""
+        self.logger.read(f"        D层-详情")
+        d_data = {'content': '', 'attachments': []}
+
+        try:
+            # 抓取页面内容
+            content = self.page.inner_text('body')
+            d_data['content'] = content[:500]
+
+            # 下载附件
+            attachments = self.page.query_selector_all('a[href*="download"], a[href*="attachment"]')
+            for att in attachments:
+                href = att.get_attribute('href')
+                if href:
+                    self._download_attachment(href)
+                    d_data['attachments'].append(href)
+
+        except Exception as e:
+            self.logger.read(f"        D层抓取失败: {e}")
+
+        return d_data
+
+    def _find_btn_in_row(self, row, labels):
+        """在行中查找按钮"""
+        btns = row.query_selector_all('a, button, span')
+        for btn in btns:
+            text = ''.join(btn.inner_text().split())
+            for label in labels:
+                if label in text:
+                    return btn
+        return None
+
+    def _next_page(self) -> bool:
+        """翻页"""
+        try:
+            next_btn = self.page.query_selector('button.el-pagination__next:not([disabled])')
+            if next_btn and next_btn.is_visible():
+                next_btn.click()
+                time.sleep(1)
+                return True
+        except:
+            pass
+        return False
+
+    def _download_attachment(self, url):
+        """下载附件"""
+        try:
+            import os
+            from pathlib import Path
+            att_dir = Path('output/att')
+            att_dir.mkdir(parents=True, exist_ok=True)
+
+            filename = url.split('/')[-1]
+            filepath = att_dir / filename
+
+            with self.page.context.expect_download() as download_info:
+                self.page.goto(url)
+            download = download_info.value
+            download.save_as(filepath)
+            self.logger.read(f"        下载附件: {filename}")
+        except Exception as e:
+            self.logger.read(f"        下载失败: {e}")

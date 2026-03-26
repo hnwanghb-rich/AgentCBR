@@ -188,35 +188,43 @@ class CarbonAuditGUI:
                 return
             self.log("✓ 登录成功")
 
-            self.log("\n步骤5: 访问项目列表页面...")
-            project_list_url = "https://cc.cscec.com/carbonfillin/projectList"
-            scraper.goto_page(project_list_url)
-            self.log("✓ 项目列表页面加载完成")
-
-            self.log("\n步骤6: 开始数据抓取...")
+            self.log("\n步骤5: 开始遍历左侧菜单...")
             from data_scraper import DataScraper
             data_scraper = DataScraper(scraper.page, logger)
 
-            tree_nodes = data_scraper.get_tree_nodes()
-            if not tree_nodes:
-                self.log("✗ 未找到树节点")
-                return
-
-            if tree_nodes:
-                data_scraper.click_tree_node(tree_nodes[0])
-
-            project_data = data_scraper.scrape_table_with_drill_down()
-            self.log(f"✓ 数据抓取完成，共 {len(project_data)} 个项目")
-
-            if not project_data:
-                self.log("✗ 未抓取到数据")
-                return
+            menu_items = data_scraper.get_menu_items()
+            self.log(f"找到 {len(menu_items)} 个菜单项")
 
             all_rows = []
-            for project_name, data_list in project_data.items():
-                df = pd.DataFrame(data_list)
-                self.root.after(0, lambda p=project_name, d=df: self.add_project_to_tree(p, d))
-                all_rows.extend(data_list)
+            for menu_idx, menu_text in enumerate(menu_items, 1):
+                self.log(f"\n[菜单 {menu_idx}/{len(menu_items)}] {menu_text}")
+
+                if not data_scraper.click_menu(menu_text):
+                    self.log(f"  跳过菜单: {menu_text}")
+                    continue
+
+                current_url = scraper.page.url
+                self.log(f"  当前URL: {current_url}")
+
+                if "carbonfillin/collect" in current_url:
+                    self.log("  检测到级联结构，使用DFS遍历...")
+                    cascade_data = data_scraper.scrape_cascade_structure()
+                    if cascade_data:
+                        df = pd.DataFrame(cascade_data)
+                        self.root.after(0, lambda m=menu_text, d=df: self.add_project_to_tree(m, d))
+                        all_rows.extend(cascade_data)
+                elif data_scraper.has_tree_structure():
+                    self.log("  检测到树结构，开始遍历...")
+                    tree_nodes = data_scraper.get_tree_nodes()
+                    if tree_nodes and len(tree_nodes) > 0:
+                        data_scraper.click_tree_node(tree_nodes[0])
+                        project_data = data_scraper.scrape_table_with_drill_down()
+                        for project_name, data_list in project_data.items():
+                            df = pd.DataFrame(data_list)
+                            self.root.after(0, lambda m=menu_text, p=project_name, d=df: self.add_project_to_tree(f"{m}/{p}", d))
+                            all_rows.extend(data_list)
+                else:
+                    self.log("  无树结构，跳过")
 
             df = pd.DataFrame(all_rows)
 
