@@ -96,37 +96,64 @@ class CarbonAuditGUI:
         # Tab 3: 抓取数据
         data_frame = ttk.Frame(self.notebook)
         self.notebook.add(data_frame, text="抓取数据")
-        self.data_tree = ttk.Treeview(data_frame, show="headings")
-        self.data_tree.pack(fill="both", expand=True, padx=5, pady=5)
-        scrollbar = ttk.Scrollbar(data_frame, orient="vertical", command=self.data_tree.yview)
+
+        # 左右分栏
+        paned = ttk.PanedWindow(data_frame, orient=tk.HORIZONTAL)
+        paned.pack(fill="both", expand=True)
+
+        # 左侧树
+        tree_frame = ttk.Frame(paned)
+        paned.add(tree_frame, weight=2)
+        self.project_tree = ttk.Treeview(tree_frame, show="tree")
+        self.project_tree.pack(fill="both", expand=True)
+        self.project_tree.bind("<<TreeviewSelect>>", self.on_project_select)
+
+        # 右侧表格
+        table_frame = ttk.Frame(paned)
+        paned.add(table_frame, weight=8)
+        self.data_tree = ttk.Treeview(table_frame, show="headings")
+        self.data_tree.pack(fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.data_tree.yview)
         scrollbar.pack(side="right", fill="y")
         self.data_tree.configure(yscrollcommand=scrollbar.set)
+
+        self.project_data = {}  # 存储项目数据
 
     def log(self, msg):
         self.log_text.insert(tk.END, msg + "\n")
         self.log_text.see(tk.END)
 
+    def on_project_select(self, event):
+        """树节点选择事件"""
+        selection = self.project_tree.selection()
+        if not selection:
+            return
+        item_id = selection[0]
+        if item_id in self.project_data:
+            self.show_data_in_table(self.project_data[item_id])
+
+    def add_project_to_tree(self, project_name, df):
+        """添加项目到树"""
+        item_id = self.project_tree.insert('', 'end', text=f"📁 {project_name}")
+        self.project_data[item_id] = df
+        self.log(f"  添加项目: {project_name} ({len(df)}条数据)")
+
     def show_data_in_table(self, df):
         """在表格中显示数据"""
-        # 清空旧数据
         for item in self.data_tree.get_children():
             self.data_tree.delete(item)
 
         if df.empty:
             return
 
-        # 设置列
         columns = list(df.columns)
         self.data_tree['columns'] = columns
         for col in columns:
             self.data_tree.heading(col, text=col)
             self.data_tree.column(col, width=100)
 
-        # 插入数据
         for idx, row in df.iterrows():
             self.data_tree.insert('', 'end', values=list(row))
-
-        self.log(f"✓ 已在表格中显示 {len(df)} 条数据")
 
     def start_audit(self):
         self.log("开始审核...")
@@ -170,28 +197,28 @@ class CarbonAuditGUI:
             from data_scraper import DataScraper
             data_scraper = DataScraper(scraper.page, logger)
 
-            # 获取树节点
             tree_nodes = data_scraper.get_tree_nodes()
             if not tree_nodes:
                 self.log("✗ 未找到树节点")
                 return
 
-            # 点击第一个树节点
             if tree_nodes:
                 data_scraper.click_tree_node(tree_nodes[0])
 
-            # 抓取表格并进入下级
-            all_data = data_scraper.scrape_table_with_drill_down()
-            self.log(f"✓ 数据抓取完成，共 {len(all_data)} 条记录")
+            project_data = data_scraper.scrape_table_with_drill_down()
+            self.log(f"✓ 数据抓取完成，共 {len(project_data)} 个项目")
 
-            if not all_data:
+            if not project_data:
                 self.log("✗ 未抓取到数据")
                 return
 
-            df = pd.DataFrame(all_data)
+            all_rows = []
+            for project_name, data_list in project_data.items():
+                df = pd.DataFrame(data_list)
+                self.root.after(0, lambda p=project_name, d=df: self.add_project_to_tree(p, d))
+                all_rows.extend(data_list)
 
-            # 显示数据到表格
-            self.root.after(0, lambda: self.show_data_in_table(df))
+            df = pd.DataFrame(all_rows)
 
             self.log("\n步骤7: 数据审核...")
             auditor = EmissionDataAuditor(self.config)
