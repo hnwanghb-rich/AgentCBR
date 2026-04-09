@@ -324,14 +324,22 @@ class DataScraper:
                 if idx >= len(rows):
                     break
 
-                btn = self._find_btn_in_row(rows[idx], ['查看记录'])
+                row = rows[idx]
+                # 抓取行数据
+                cells = [c.inner_text().strip() for c in row.query_selector_all('td')]
+
+                # 判断是否有"查看记录"按钮
+                btn = self._find_btn_in_row(row, ['查看记录'])
                 if btn:
+                    self.logger.read(f"    第{idx+1}行记录: {' | '.join(cells)}")
                     btn.click()
                     time.sleep(1)
                     c_data = self._scrape_level_c()
                     b_data.append({'c_data': c_data})
                     self.page.go_back()
                     time.sleep(1)
+                else:
+                    self.logger.read(f"    第{idx+1}行: 没抓到")
 
             if not self._next_page():
                 break

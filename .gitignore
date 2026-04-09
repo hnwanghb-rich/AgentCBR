@@ -1,4 +1,4 @@
-__pycache__/
+﻿__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -12,3 +12,77 @@ temp/
 *.log
 .env
 config/config.local.json
+
+
+# ClawBY19 Auto-Generated
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+*.pyz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Compiled files
+*.exe
+*.pkg
+
+# Temporary files
+*.tmp
+*.temp
+
+# Documentation
+*.docx
+*.xlsx
+
+# Media
+*.png
+
+# Config samples
+*.sample
+
+# Project specific
+output/
+lib/
+.claude/
+
+# Python bytecode
+*.pyc

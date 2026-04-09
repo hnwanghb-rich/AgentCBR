@@ -38,90 +38,86 @@ class BaseScraper:
             raise
 
     def login(self):
-        """登录碳盘查系统"""
+        """登录系统"""
         try:
             url = self.config['website']['url']
             self.logger.read(f"访问登录页面: {url}")
             self.page.goto(url, wait_until="networkidle", timeout=60000)
-            self.page.wait_for_selector('input', timeout=15000)
-            self.logger.read(f"登录表单已加载，当前URL={self.page.url}")
-
-            usel = "input[type='text'], input:not([type])"
-            psel = "input[type='password']"
-            bsel = "button[type='submit']"
-
-            return self._do_login(url, usel, psel, bsel)
-
+            self.logger.read(f"页面加载完成，当前URL={self.page.url}")
+            return self._do_login(url)
         except Exception as e:
             self.logger.read(f"登录异常: {str(e)}")
             return False
 
-    def _do_login(self, url, usel, psel, bsel):
-        """执行登录操作"""
+    def _do_login(self, url):
+        """执行登录操作（通过role/name查找输入框，去空格匹配）"""
         username = self.config['website']['username']
         password = self.config['website']['password']
 
-        u_input = self.page.locator("input[type='text']:visible, input:not([type]):visible").first
-        p_input = self.page.locator("input[type='password']:visible").first
+        # 查找账号输入框：name含'账号'（去空格）
+        u_input = self.page.get_by_role("textbox", name="账号")
+        # 查找密码输入框：name含'密码'（去空格）
+        p_input = self.page.get_by_role("textbox", name="密码")
 
+        self.logger.read("填写账号")
         u_input.click()
-        self.page.keyboard.press("Control+a")
-        self.page.keyboard.press("Delete")
         u_input.fill(username)
         self.page.evaluate("""
-            (sel) => {
-                const el = document.querySelector(sel);
-                if (el) {
-                    el.dispatchEvent(new Event('input', {bubbles: true}));
-                    el.dispatchEvent(new Event('change', {bubbles: true}));
-                }
-            }
-        """, usel)
-
-        p_input.click()
-        self.page.keyboard.press("Control+a")
-        self.page.keyboard.press("Delete")
-        p_input.fill(password)
-        self.page.evaluate("""
-            (sel) => {
-                const el = document.querySelector(sel);
-                if (el) {
-                    el.dispatchEvent(new Event('input', {bubbles: true}));
-                    el.dispatchEvent(new Event('change', {bubbles: true}));
-                }
-            }
-        """, psel)
-
-        self.page.evaluate("""
             () => {
-                const btn = document.querySelector("button[type='submit']")
-                    || document.querySelector('.el-button--primary')
-                    || [...document.querySelectorAll('button')].find(
-                        b => b.innerText.replace(/\\s/g, '').includes('登录')
-                    );
-                if (btn) btn.click();
+                const els = Array.from(document.querySelectorAll('input'));
+                const el = els.find(e => (e.placeholder || e.name || e.getAttribute('aria-label') || '').replace(/\\s/g, '').includes('账号'));
+                if (el) {
+                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
+                }
             }
         """)
-        self.logger.read("已点击登录按钮")
 
-        return self._wait_login_success(url)
-
-    def _wait_login_success(self, url):
-        """等待登录跳转并验证结果"""
-        try:
-            self.page.wait_for_function("""
-                () => {
-                    if (location.pathname === '/index') return true;
-                    if (!location.href.includes('login') && location.href !== '%s') return true;
-                    return false;
+        self.logger.read("填写密码")
+        p_input.click()
+        p_input.fill(password)
+        self.page.evaluate("""
+            () => {
+                const els = Array.from(document.querySelectorAll('input'));
+                const el = els.find(e => (e.placeholder || e.name || e.getAttribute('aria-label') || '').replace(/\\s/g, '').includes('密码'));
+                if (el) {
+                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                    el.dispatchEvent(new Event('change', {bubbles: true}));
                 }
-            """ % url, timeout=20000)
-        except PlaywrightTimeoutError:
-            pass
+            }
+        """)
 
-        current_url = self.page.url
-        if 'login' in current_url.lower():
-            self.logger.read(f"登录失败，仍在登录页: {current_url}")
+        self.logger.read("点击登录按钮")
+        # 查找登录按钮：role=button, name去空格后=='登录'
+        btn = self.page.evaluate("""
+            () => {
+                const btns = Array.from(document.querySelectorAll('button'));
+                const target = btns.find(b => b.innerText.replace(/\\s/g, '') === '登录');
+                if (target) { target.click(); return true; }
+                return false;
+            }
+        """)
+        if not btn:
+            # fallback: playwright get_by_role
+            self.page.get_by_role("button", name="登 录").click()
+
+        try:
+            self.page.wait_for_url(lambda u: u != url, timeout=15000)
+        except PlaywrightTimeoutError:
+            self.logger.read("等待跳转超时，检查当前页面")
+
+        # 该平台登录后URL可能仍含'login'，改为检查登录表单是否消失
+        import time
+        time.sleep(1)
+        login_form_gone = self.page.evaluate("""
+            () => {
+                const inputs = document.querySelectorAll('input[type="password"]');
+                return inputs.length === 0;
+            }
+        """)
+
+        if not login_form_gone:
+            self.logger.read("登录失败，密码框仍存在")
             return False
 
         self.logger.read(f"登录成功，当前URL={self.page.url}")
@@ -134,9 +130,7 @@ class BaseScraper:
             url = self.page.url
             title = self.page.title()
             content = self.page.evaluate("""
-                () => {
-                    return document.body.innerText.substring(0, 500);
-                }
+                () => { return document.body.innerText.substring(0, 500); }
             """)
             self.logger.read(f"\n【页面信息】")
             self.logger.read(f"URL: {url}")
